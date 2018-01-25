@@ -3,21 +3,33 @@
 // Pins
 
 int mainLedPin = 2;
-int button1Pin = 4;
+int buttonPushSmallPin = 4;
+int buttonPushPowerTriggerPin =  5;
+int buttonPushLargePin = 6;
+
+//int buttonReadSmallPin = 1000;
+
+int padSensorPin=A7;
+// Triggers
+boolean readPad;
+boolean readLed;
+//boolean readLid;
 
 // Status vars
 volatile byte mainLedState;  // 0 = off, 1 = ready (on), 2 = heating (slow), 3/4 = no water (fast)
+volatile boolean padUsed;
+volatile boolean lidClosed;
 
 // Counters
 volatile unsigned int pulse;
 
 // Timers
 unsigned long readMainLedPulseTimer;
-unsigned long otherTimer;
+unsigned long padUsedTimer;
 
 // Intervals
 unsigned long readMainLedPulseTimerInterval;
-unsigned long otherTimerInterval;
+unsigned long padUsedInterval;
 
 // mainLED pulse threshold
 int mainLedThreshold;
@@ -48,7 +60,7 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(mainLedPin), count_main_led_pulse, CHANGE);
 
   // Configure Buttons
-  pinMode(button1Pin, OUTPUT);
+  pinMode(buttonPushSmallPin, OUTPUT);
 
 }
 
@@ -61,6 +73,8 @@ void loop() {
   {
     getMainLedState();
   }
+
+  
 
 }
 // Handle serial commands
@@ -77,23 +91,50 @@ void handleSerial() {
     inByte = 0;
   }
   if (command.equalsIgnoreCase("on")) {
-    digitalWrite(button1Pin, HIGH);
+    digitalWrite(buttonPushSmallPin, HIGH);
     command = "";
   }
   if (command.equalsIgnoreCase("off")) {
-    digitalWrite(button1Pin, LOW);
+    digitalWrite(buttonPushSmallPin, LOW);
     command = "";
   }
   if (command.equalsIgnoreCase("push")) {
-    digitalWrite(button1Pin, HIGH);
+    digitalWrite(buttonPushSmallPin, HIGH);
     delay(200); // EVIL!
-    digitalWrite(button1Pin, LOW);
+    digitalWrite(buttonPushSmallPin, LOW);
     command = "";
   }
   if (command.equalsIgnoreCase("status")) {
     Serial.print("State is: ");
     Serial.println(mainLedState);
     command = "";
+  }
+}
+
+// is a used pad in the machine?
+void getPadUsedStatus() {
+  // This function uses a Voltage Devider with a 27k Ohm resistor to measure the resistance of the coffee pad
+  // experiments have shown:
+  // the resistance of a dry pad is >10M Om
+  // the resistance of a wet pad is < 100k Ohm (pad is used)
+  
+  // fancy formula from: https://arduino.stackexchange.com/questions/28222/a-question-about-resistance-measurement-with-arduino
+
+  // get raw sensor value
+  int sensorValue = analogRead(padSensorPin);
+  // calculate the voltage dropped by the unknown resistor
+  float dv = (sensorValue / 1024.0)*5.0;
+  // with the dropped voltage dv, the known 27k Ohm of the first resistor and the knowledge of having 5V from the Arduino we can calulate the resistance of the coffee pad
+  float res = 27000.0 * (1/((5.0/dv)-1));
+  //Serial.print("Resistance is: ");
+  //Serial.println(res);
+
+  // if resistance is lower 100k the pad is used
+  if(res < 100000){
+    padUsed = true;
+  }
+  else {
+    padUsed = false;
   }
 }
 
