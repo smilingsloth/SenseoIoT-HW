@@ -9,7 +9,7 @@ int buttonPushLargePin = 6;
 
 //int buttonReadSmallPin = 1000;
 
-int padSensorPin=A7;
+int padSensorPin = A7;
 // Triggers
 boolean readPad;
 boolean readLed;
@@ -74,7 +74,7 @@ void loop() {
     getMainLedState();
   }
 
-  
+
 
 }
 // Handle serial commands
@@ -117,20 +117,20 @@ void getPadUsedStatus() {
   // experiments have shown:
   // the resistance of a dry pad is >10M Om
   // the resistance of a wet pad is < 100k Ohm (pad is used)
-  
+
   // fancy formula from: https://arduino.stackexchange.com/questions/28222/a-question-about-resistance-measurement-with-arduino
 
   // get raw sensor value
   int sensorValue = analogRead(padSensorPin);
   // calculate the voltage dropped by the unknown resistor
-  float dv = (sensorValue / 1024.0)*5.0;
+  float dv = (sensorValue / 1024.0) * 5.0;
   // with the dropped voltage dv, the known 27k Ohm of the first resistor and the knowledge of having 5V from the Arduino we can calulate the resistance of the coffee pad
-  float res = 27000.0 * (1/((5.0/dv)-1));
+  float res = 27000.0 * (1 / ((5.0 / dv) - 1));
   //Serial.print("Resistance is: ");
   //Serial.println(res);
 
   // if resistance is lower 100k the pad is used
-  if(res < 100000){
+  if (res < 100000) {
     padUsed = true;
   }
   else {
