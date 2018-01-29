@@ -2,7 +2,7 @@
 ## ToDo
 - [X] Make a Github repo :smile:
 - [ ] Create Subfolders for Arduino Nano and ESP8266-01
-- [ ] Initial Arduino Code
+- [X] Initial Arduino Code
 - [ ] Initial ESP Code
 - [ ] Project description
 - [ ] Documentation
@@ -11,11 +11,11 @@
 - [X] Get Senseo LED status
 - [X] 'Push' a button
 - [X] Multitasking
-- [ ] Serial Communication to/from ESP
+- [X] Serial Communication to/from ESP
 - [ ] RGP LED status
-- [ ] Add autostart feature
-- [ ] Add sensors for lid
-- [ ] Add sensors for coffee-pad
+- [X] Add autostart feature
+- [X] Add sensors for lid
+- [X] Add sensors for coffee-pad
 - [ ] Add sensors for cup
 - [ ] Add sensors for water?
 - [ ] Documentation
