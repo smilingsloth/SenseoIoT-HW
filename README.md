@@ -1,9 +1,9 @@
 # SenseoIoT-HW
 ## ToDo
 - [X] Make a Github repo :smile:
-- [ ] Create Subfolders for Arduino Nano and ESP8266-01
+- [X] Create Subfolders for Arduino Nano and ESP8266-01
 - [X] Initial Arduino Code
-- [ ] Initial ESP Code
+- [X] Initial ESP Code
 - [ ] Project description
 - [ ] Documentation
 - [ ] Credits
@@ -25,10 +25,10 @@
 ### ESP8266-01 Todo
 - [X] Wire an Arduino Uno to programm
 - [X] Connect to Wi-Fi
-- [ ] Serial Communication to/from Arduino
+- [X] Serial Communication to/from Arduino
 - [ ] JSON formatter
-- [ ] MQTT
-- [ ] Setup Mode (WiFiManager) + Config file
+- [X] MQTT
+- [X] Setup Mode (WiFiManager) + Config file
 - [ ] Documentation
 - [ ] Logging
 - [ ] Security
