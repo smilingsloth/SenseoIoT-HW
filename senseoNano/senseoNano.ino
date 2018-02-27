@@ -15,8 +15,10 @@ int rgbGreenPin = 9;
 int rgbBluePin = 10;
 int rgbRedPin = 12;
 
+int cupSensorPin = A2;
 int lidSensorPin = A4;
 int padSensorPin = A6;
+
 
 
 // Status vars
@@ -72,13 +74,14 @@ void setup() {
   readMainLedPulseTimer = millis();
 
   // Configure interrup to read the LED pulse
-  pinMode(mainLedPin, INPUT_PULLUP);
+  //pinMode(mainLedPin, INPUT_PULLUP);
+  pinMode(mainLedPin, INPUT); // Connected with pulldown
   attachInterrupt(digitalPinToInterrupt(mainLedPin), count_main_led_pulse, CHANGE);
 
 
   // Configre sensors
   pinMode(lidSensorPin, INPUT);
-  pinMode(padSensorPin, INPUT);
+  pinMode(padSensorPin, INPUT_PULLUP);
   //pinMode Pad-Sensor = Analog
 
   // Configure Buttons
@@ -298,11 +301,7 @@ void handleSerial() {
     // clear command
     command = "";
   }
-  if(command.equalsIgnoreCase("power")){
-    togglePower();
-    // clear command
-    command = "";
-  }
+  
 
 }
 
@@ -337,13 +336,15 @@ boolean getPadUsedStatus() {
   // fancy formula from: https://arduino.stackexchange.com/questions/28222/a-question-about-resistance-measurement-with-arduino
 
   // get raw sensor value
+  delay(20);
   int sensorValue = analogRead(padSensorPin);
+  delay(20);
   // calculate the voltage dropped by the unknown resistor
   float dv = (sensorValue / 1024.0) * 5.0;
   // with the dropped voltage dv, the known 27k Ohm of the first resistor and the knowledge of having 5V from the Arduino we can calulate the resistance of the coffee pad
   float res = 27000.0 * (1 / ((5.0 / dv) - 1));
-  //Serial.print("Resistance is: ");
-  //Serial.println(res);
+  Serial.print("Resistance is: ");
+  Serial.println(res);
 
   // if resistance is lower 1M the pad is used
   if (res < 1000000) {
@@ -356,8 +357,8 @@ boolean getPadUsedStatus() {
 }
 
 byte getMainLedStatus() {
-  //Serial.print("Pulse: ");
-  //Serial.println(pulse);
+  Serial.print("Pulse: ");
+  Serial.println(pulse);
 
   // If there is no pulse: Is the LED on or off?
   if (pulse == 0) {

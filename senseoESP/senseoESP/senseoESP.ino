@@ -362,6 +362,14 @@ if (serialCommandReady){
     snprintf (m, 100, "status: %s", statusMessage);
     client.publish(mqtt_publ_topic, m);
     command = "";
+  }else if (command.startsWith("Res")){
+    Serial.println("status received");
+    String msgS = command.substring(2);
+    msgS.toCharArray(statusMessage, 80);
+    char m[100];
+    snprintf (m, 100, "status: %s", statusMessage);
+    client.publish(mqtt_publ_topic, m);
+    command = "";
   }
   serialCommandReady=false;
   command="";
