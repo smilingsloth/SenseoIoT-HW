@@ -19,54 +19,59 @@ int cupSensorPin = A2;
 int lidSensorPin = A4;
 int padSensorPin = A6;
 
-
-
-// Status vars
-volatile byte mainLedState;  // 0 = off, 1 = ready (on), 2 = heating (slow), 3/4 = no water (fast)
+// Sensor status vars
+// holds the current state of the senseo (0 = off, 1=ready, 2=heating/making (slow blink), 3 = no water (fast blinking)
+volatile byte mainLedState;
+// holds the state of the pad sensor (true = old pad, false=fresh pad)
 volatile boolean padUsed;
+// holds the state of the lid sensor (true = closed, false = open)
 volatile boolean lidClosed;
-boolean autoSmall = false;
-boolean autoNetSmall = false;
-boolean autoLarge = false;
-boolean autoNetLarge = false;
-boolean mainLedOff = false;
-boolean green = false;
-boolean blue = false;
+// is a cup present ( 0 = no, 1 = yes)
+volatile boolean cupStatus;
+// commands
+volatile boolean autoSmall;     //autostart for one cup
+volatile boolean autoNetSmall;  //autostart for one cup comming from network
+volatile boolean autoLarge;     //autostart for two cups
+volatile boolean autoNetLarge;  //autostart for two cups comming from network
 
-// Counters
-volatile unsigned int pulse;
-unsigned int ledBlinkCount;
-// Timers
+// utillities LED blinking
+volatile boolean mainLedOff;    //mainLed on or off for timing of second Led
+
+// utillities: Timers/Counters/Intervals
 unsigned long readMainLedPulseTimer;
+unsigned long readMainLedPulseTimerInterval;
 
 unsigned long ledLastOff = 0UL;
 unsigned long lastLedSwitch;
 
-OneButton smallButton(buttonSmallReadPin, false);
-OneButton largeButton(buttonLargeReadPin, false);
-
-// Intervals
-unsigned long readMainLedPulseTimerInterval;
-
+volatile unsigned int pulse;
+volatile unsigned int ledBlinkCount;
+// for switching on/off green/blue
+volatile boolean green;
+volatile boolean blue;
 
 // mainLED pulse threshold
 int mainLedThreshold;
+int padResistanceThreshold;
+int cupWeightThreshold;
 
 // Serial Communication
 String command; // String input from command prompt
-char inByte; // Byte input from command prompto
+char inByte; // Byte input from command prompt
 
-// Function definitions
-//void count_pulse();
-//void handleSerial();
+// Buttons
+OneButton smallButton(buttonSmallReadPin, false);
+OneButton largeButton(buttonLargeReadPin, false);
+OneButton powerButton(buttonPowerReadPin, false); //TODO: needed?
 
 void setup() {
-  // put your setup code here, to run once:
+  // Set Serial speed
   Serial.begin(115200);
 
-  // Set thresholds
+    // Set thresholds
   mainLedThreshold = 10;   // below 10 per 2 seconds = slow, greater 10 per 2 seconds = fast
-
+  padResistanceThreshold = 1000000; // if resistance of pad is below value it is wet --> used
+  cupWeightThreshold = 100; //TODO
   // Set Intervals
   readMainLedPulseTimerInterval = 2000UL;   // count pulses for 2 seconds
 
@@ -102,231 +107,16 @@ void setup() {
   smallButton.attachDoubleClick(smallDoubleClick);
   largeButton.attachClick(largeClick);
   largeButton.attachDoubleClick(largeDoubleClick);
+  powerButton.attachClick(powerClick);
+
+  // initialize green/blue as off
+  green=false;
+  blue=false;
 
 }
 
-void loop() {
-  smallButton.tick();
-  largeButton.tick();
-  // Check for serial command
-  handleSerial();
-
-  // read main LED + status
-  if ((millis() - readMainLedPulseTimer) > readMainLedPulseTimerInterval)
-  {
-    getMainLedStatus();
-    getLidStatus();
-    getPadUsedStatus();
-
-  }
-  // turn on for task
-  if ((autoSmall || autoNetSmall || autoLarge || autoNetLarge) && mainLedState == 0){
-    togglePower();
-  }
-  // blink green/blue
-  if (mainLedState != 2) {
-    green = false;
-    digitalWrite(rgbGreenPin, green);
-    blue = false;
-    digitalWrite(rgbBluePin, blue);
-
-  }
-  // if autostart one cup and state is heating
-  if (autoSmall && mainLedState == 2 && (millis() - lastLedSwitch) > 100 && ledBlinkCount < 2 && mainLedOff) {
-    //
-    green = !green;
-    digitalWrite(rgbGreenPin, green);
-    ledBlinkCount ++;
-    lastLedSwitch = millis();
-  }
-  if (autoLarge && mainLedState == 2 && (millis() - lastLedSwitch) > 100 && ledBlinkCount < 4 && mainLedOff) {
-    //
-    green = !green;
-    digitalWrite(rgbGreenPin, green);
-    ledBlinkCount ++;
-    lastLedSwitch = millis();
-  }
-  if (autoNetSmall && mainLedState == 2 && (millis() - lastLedSwitch) > 100 && ledBlinkCount < 2 && mainLedOff) {
-    //
-    blue = !blue;
-    digitalWrite(rgbBluePin, blue);
-    ledBlinkCount ++;
-    lastLedSwitch = millis();
-  }
-  if (autoNetLarge && mainLedState == 2 && (millis() - lastLedSwitch) > 100 && ledBlinkCount < 4 && mainLedOff) {
-    //
-    blue = !blue;
-    digitalWrite(rgbBluePin, blue);
-    ledBlinkCount ++;
-    lastLedSwitch = millis();
-  }
-
-  if ((autoSmall || autoNetSmall) && mainLedState == 1) {
-    delay(1000);
-    pushSmall();
-    Serial.println("s:made small");
-    autoSmall = false;
-    autoNetSmall = false;
-  }
-  if ((autoLarge || autoNetLarge) && mainLedState == 1) {
-    delay(1000);
-    pushLarge();
-    Serial.println("s:made large");
-    autoLarge = false;
-    autoNetLarge = false;
-  }
-  if (autoSmall && mainLedState == 3) {
-    Serial.println("e:aborted autoSmall, no water");
-    autoSmall = false;
-  }
-  if (autoNetSmall && mainLedState == 3) {
-    Serial.println("e:aborted autoNetSmall, no water");
-    autoNetSmall = false;
-  }
-  if (autoLarge && mainLedState == 3) {
-    Serial.println("e:aborted autoLarge, no water");
-    autoLarge = false;
-  }
-  if (autoNetLarge && mainLedState == 3) {
-    Serial.println("e:aborted autoNetLarge, no water");
-    autoNetLarge = false;
-  }
-  ///////////////////////////////
-  if (autoSmall && lidClosed == false) {
-    Serial.println("e:aborted autoSmall, lid open");
-    autoSmall = false;
-  }
-  if (autoNetSmall && lidClosed == false) {
-    Serial.println("e:aborted autoNetSmall, lid open");
-    autoNetSmall = false;
-  }
-  if (autoLarge && lidClosed == false) {
-    Serial.println("e:aborted autoLarge, lid open");
-    autoLarge = false;
-  }
-  if (autoNetLarge && lidClosed == false) {
-    Serial.println("e:aborted autoNetLarge, lid open");
-    autoNetLarge = false;
-  }
-  ////////////////////////////////////////
-  if (autoSmall && padUsed) {
-    Serial.println("e:aborted autoSmall, pad already used");
-    autoSmall = false;
-  }
-  if (autoNetSmall && padUsed) {
-    Serial.println("e:aborted autoNetSmall, pad already used");
-    autoNetSmall = false;
-  }
-  if (autoLarge && padUsed) {
-    Serial.println("e:aborted autoLarge, pad already used");
-    autoLarge = false;
-  }
-  if (autoNetLarge && padUsed) {
-    Serial.println("e:aborted autoNetLarge, pad already used");
-    autoNetLarge = false;
-  }
-
-
-  delay(10);
-
-
-}
-void smallClick() {
-  Serial.println("s:manual small click");
-}
-
-void smallDoubleClick() {
-  Serial.println("s:auto small");
-  autoSmall = true;
-}
-void largeClick() {
-  Serial.println("s:manual large  click");
-}
-void largeDoubleClick() {
-  Serial.println("s:auto large");
-  autoLarge = true;
-}
-
-// Handle serial commands
-void handleSerial() {
-  if (Serial.available() > 0) {
-    inByte = Serial.read();
-    // only input if a letter, number, =,?,+ are typed!
-    if ((inByte >= 65 && inByte <= 90) || (inByte >= 97 && inByte <= 122) || (inByte >= 48 &&     inByte <= 57) || inByte == 43 || inByte == 61 || inByte == 63) {
-      command.concat(inByte);
-    }
-  }
-  if (inByte == 10 || inByte == 13) {
-
-    inByte = 0;
-  }
-  // new commands
-  if (command.equalsIgnoreCase("makeSmall")) {
-    if (autoLarge || autoSmall) {
-      Serial.println("e:busy");
-    }
-    else {
-      autoNetSmall = true;
-    }
-    
-
-    // clear command
-    command = "";
-  }
-  if (command.equalsIgnoreCase("makeLarge")) {
-    if (autoLarge || autoSmall) {
-      Serial.println("e:busy");
-    }
-    else {
-      autoNetLarge = true;
-    }
-
-    // clear command
-    command = "";
-  }
-  if (command.equalsIgnoreCase("status")) {
-    // check lid
-    // check pad
-    // check status (off, no water, heating, ready)
-    getLidStatus();
-    getPadUsedStatus();
-    getMainLedStatus();
-    Serial.print("lidClosed:");
-    Serial.print(lidClosed);
-    Serial.print(",padUsed:");
-    Serial.print(padUsed);
-    Serial.print(",status:");
-    Serial.println(mainLedState);
-
-    // clear command
-    command = "";
-  }
-  
-
-}
-
-void togglePower() {
-  digitalWrite(buttonPowerPushPin, HIGH);
-  delay(30);
-  digitalWrite(buttonPowerPushPin, LOW);
-}
-
-void pushSmall() {
-  digitalWrite(buttonSmallPushPin, HIGH);
-  delay(30);
-  digitalWrite(buttonSmallPushPin, LOW);
-}
-void pushLarge() {
-  digitalWrite(buttonLargePushPin, HIGH);
-  delay(30);
-  digitalWrite(buttonLargePushPin, LOW);
-}
-
-boolean getLidStatus() {
-  lidClosed = digitalRead(lidSensorPin);
-  return lidClosed;
-}
 // is a used pad in the machine?
+//TODO: set the current voltage as reference!
 boolean getPadUsedStatus() {
   // This function uses a Voltage Devider with a 27k Ohm resistor to measure the resistance of the coffee pad
   // experiments have shown:
@@ -343,11 +133,13 @@ boolean getPadUsedStatus() {
   float dv = (sensorValue / 1024.0) * 5.0;
   // with the dropped voltage dv, the known 27k Ohm of the first resistor and the knowledge of having 5V from the Arduino we can calulate the resistance of the coffee pad
   float res = 27000.0 * (1 / ((5.0 / dv) - 1));
+  
+  //if debug
   Serial.print("Resistance is: ");
   Serial.println(res);
 
   // if resistance is lower 1M the pad is used
-  if (res < 1000000) {
+  if (res < padResistanceThreshold) {
     padUsed = true;
   }
   else {
@@ -356,7 +148,9 @@ boolean getPadUsedStatus() {
   return padUsed;
 }
 
+// get status of main LED
 byte getMainLedStatus() {
+  // debug only
   Serial.print("Pulse: ");
   Serial.println(pulse);
 
@@ -384,24 +178,212 @@ byte getMainLedStatus() {
 // Interrupt callback to count LED pulses
 void count_main_led_pulse()
 {
+  // count pulse
   pulse++;
+
+  // reset blue or green on every change of red
+  green = false;
+  blue = false;
+  digitalWrite(rgbBluePin,LOW);
+  digitalWrite(rgbGreenPin,LOW);
+  
+  // if changed to "on"
   if (digitalRead(mainLedPin)) {
-    
+
+    // debug only (set second led to same state as main LED)
     digitalWrite(rgbRedPin, HIGH);
+
+    // state of main LED
     mainLedOff = false;
+    
+    // reset blink count (blink of blue or green)
     ledBlinkCount = 0;
-    green = false;
-    blue = false;
   }
   else {
+    // timing for second LED
     ledLastOff = millis();
+    // state of main LED
     mainLedOff = true;
 
+    // debug only (set second led to same state as main LED)
     digitalWrite(rgbRedPin, LOW);
-    green = false;
-    blue = false;
+    
   }
 
 }
 
+// recognize power toggle
+void powerClick() {
 
+  //TODO: Could be wrong value if mainLedState is not already updated
+  if(mainLedState == 0){
+    Serial.println("s:power toggle - now off");
+  }
+  else {
+    Serial.println("s:power toggle - now on");
+  }
+}
+// report manual small click
+void smallClick() {
+  Serial.println("s:manual small click");
+}
+void largeClick() {
+  Serial.println("s:manual large  click");
+}
+// report auto small and enable auto small
+void smallDoubleClick() {
+  Serial.println("s:auto small");
+  autoSmall = true;
+  autoLarge = false;
+  autoNetSmall = false;
+  autoNetLarge = false;
+}
+void largeDoubleClick() {
+  Serial.println("s:auto large");
+  autoSmall = false;
+  autoLarge = true;
+  autoNetSmall = false;
+  autoNetLarge = false;
+}
+// report auto small and enable auto small
+void smallNet() {
+  Serial.println("s:network auto small");
+  autoSmall = false;
+  autoLarge = false;
+  autoNetSmall = true;
+  autoNetLarge = false;
+}
+void largeNet() {
+  Serial.println("s:network auto large");
+  autoSmall = false;
+  autoLarge = false;
+  autoNetSmall = false;
+  autoNetLarge = true;
+}
+
+void togglePower() {
+  digitalWrite(buttonPowerPushPin, HIGH);
+  delay(30);
+  digitalWrite(buttonPowerPushPin, LOW);
+}
+
+void pushSmall() {
+  digitalWrite(buttonSmallPushPin, HIGH);
+  delay(30);
+  digitalWrite(buttonSmallPushPin, LOW);
+}
+void pushLarge() {
+  digitalWrite(buttonLargePushPin, HIGH);
+  delay(30);
+  digitalWrite(buttonLargePushPin, LOW);
+}
+
+boolean getLidStatus() {
+  lidClosed = digitalRead(lidSensorPin);
+  return lidClosed;
+}
+boolean getCupStatus() {
+  //TODO: read cup sensor
+  int value=500;
+  if (value > cupWeightThreshold){
+    cupStatus = true;
+    return true;
+  }
+  else {
+    cupStatus = false;
+    return false;
+  }
+}
+//////////////////////////////////////////////////////
+//////////////////////////////////////////////////////
+
+// Handle serial commands (comming from ESP (network)
+void handleSerial() {
+  // if input at serial is available read it
+  if (Serial.available() > 0) {
+    inByte = Serial.read();
+    // only input if a letter, number, =,?,+ are typed!
+    if ((inByte >= 65 && inByte <= 90) || (inByte >= 97 && inByte <= 122) || (inByte >= 48 &&     inByte <= 57) || inByte == 43 || inByte == 61 || inByte == 63) {
+      command.concat(inByte);
+    }
+  }
+  //newline
+  if (inByte == 10 || inByte == 13) {
+
+    inByte = 0;
+  }
+  
+  // makeSmall from network
+  if (command.equalsIgnoreCase("makeSmall")) {
+    // already busy
+    if (autoLarge || autoSmall) {
+      Serial.println("e:busy");
+    }
+    else {
+      smallNet();
+    }
+    
+    // clear command
+    command = "";
+  }
+
+  // makeLarge from network
+  if (command.equalsIgnoreCase("makeLarge")) {
+    // already busy
+    if (autoLarge || autoSmall) {
+      Serial.println("e:busy");
+    }
+    else {
+      largeNet();
+    }
+
+    // clear command
+    command = "";
+  }
+  if (command.equalsIgnoreCase("status")) {
+    // check lid
+    // check pad
+    // check status (off, no water, heating, ready)
+    // refresh all readings
+    getLidStatus();
+    getPadUsedStatus();
+    getMainLedStatus();
+    Serial.print("lidClosed:");
+    Serial.print(lidClosed);
+    Serial.print(",padUsed:");
+    Serial.print(padUsed);
+    Serial.print(",status:");
+    Serial.println(mainLedState);
+
+    // clear command
+    command = "";
+  }
+  
+
+}
+//////////////////////////////////////////////////////
+//////////////////////////////////////////////////////
+void loop() {
+  // tick the buttons
+  smallButton.tick();
+  largeButton.tick();
+  powerButton.tick();
+
+  // refresh status (every X seconds, X=readMainLedPulseTimerInterval)
+  getLidStatus();
+  getPadUsedStatus();
+  getCupStatus();
+  if ((millis() - readMainLedPulseTimer) > readMainLedPulseTimerInterval)
+  {
+    getMainLedStatus();
+    
+  }
+
+  // turn on for task
+  if ((autoSmall || autoNetSmall || autoLarge || autoNetLarge) && mainLedState == 0){
+    togglePower();
+  }
+
+  
+
+}
